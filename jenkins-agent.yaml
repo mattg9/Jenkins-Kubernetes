@@ -1,0 +1,25 @@
+# jenkins-agent.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: jenkins-agent
+  namespace: jenkins
+  labels:
+    jenkins-agent: "true"
+spec:
+  containers:
+  - name: jnlp
+    image: jenkins/inbound-agent:4.11-1
+    args:
+    - "${computer.jnlpmac}"
+    - "${computer.name}"
+    resources:
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+    env:
+    - name: JENKINS_URL
+      value: "http://jenkins-service.jenkins.svc.cluster.local:8080"

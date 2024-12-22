@@ -1,0 +1,24 @@
+# URL for accessing the Kubernetes API server (internal to the cluster)
+# https://kubernetes.default.svc.cluster.local
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins-service         # The name of the service
+  namespace: jenkins            # The namespace where the service is defined
+  annotations:
+      prometheus.io/scrape: 'true'    # Tells Prometheus to scrape this service for metrics
+      prometheus.io/path:   /         # Path for Prometheus to scrape (root endpoint)
+      prometheus.io/port:   '8080'    # Port to scrape metrics from (Jenkins web interface)
+spec:
+  selector:
+    app: jenkins-server         # Selector to match the Jenkins pods (based on their label)
+  type: NodePort                # Exposes the service on a port on each node in the cluster
+  ports:
+    - port: 50000
+      targetPort: 50000
+      name: jnlp
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30000
+      name: httpport
