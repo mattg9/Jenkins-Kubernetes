@@ -8,9 +8,13 @@ spec:
       - "sh"
       - "-c"
       - |
-          # Add Bullseye backports and install Python 3.11
-          echo "deb http://deb.debian.org/debian bullseye-backports main" > /etc/apt/sources.list.d/bullseye-backports.list
-          apt-get update && apt-get install -y python3.11
+          echo "Running as root to install Python 3.11"
+          apt-get update && apt-get install -y --no-install-recommends \
+          software-properties-common \
+          add-apt-repository ppa:deadsnakes/ppa
+          apt-get update
+          apt-get install -y python3.11
+          apt-get clean
     securityContext:
       runAsUser: 0  # Run as root user for installation
     resources:
