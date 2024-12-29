@@ -6,9 +6,14 @@ spec:
       - "sh"
       - "-c"
       - |
-        echo "Installing Python..." &&
+        # Installing Python
         apt-get update &&
         apt-get install -y python3 python3-pip &&
-        python3 --version
+        python3 --version &&
+        # Jenkins agent command
+        exec java -jar /usr/share/jenkins/agent.jar \
+          -jnlpUrl ${JENKINS_URL}/computer/${JENKINS_AGENT_NAME}/slave-agent.jnlp \
+          -secret ${JENKINS_SECRET} \
+          -workDir ${JENKINS_AGENT_WORKDIR}
       securityContext:
         runAsUser: 0  # Run as root
