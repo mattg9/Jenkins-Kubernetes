@@ -12,8 +12,10 @@ spec:
         python3 --version &&
         # Jenkins agent command
         exec java -jar /usr/share/jenkins/agent.jar \
-          -jnlpUrl ${JENKINS_URL}/computer/${JENKINS_AGENT_NAME}/slave-agent.jnlp \
+          -url ${JENKINS_URL} \
+          -name ${JENKINS_AGENT_NAME} \
           -secret ${JENKINS_SECRET} \
-          -workDir ${JENKINS_AGENT_WORKDIR}
+          -workDir ${JENKINS_AGENT_WORKDIR} \
+          ${REMOTING_OPTS}
       securityContext:
         runAsUser: 0  # Run as root
