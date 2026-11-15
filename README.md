@@ -11,7 +11,7 @@ A local proof of concept for running a Jenkins controller in a [kind](https://ki
 - `service-account.yaml` gives the controller namespace-scoped permissions to manage agent pods.
 - `volume.yaml` defines local persistent storage for Jenkins home.
 - `jenkins-deployment.yaml` and `jenkins-service.yaml` deploy and expose the controller.
-- `jenkins-agent.yaml` is a pod-template fragment for an inbound agent; it is not a standalone Kubernetes resource.
+- `jenkins-agent.yaml` is a complete Kubernetes Pod manifest intended for the Kubernetes plugin's pod-template YAML field. It is not applied directly by the setup commands.
 
 ## Prerequisites
 
@@ -44,11 +44,50 @@ Treat that output as a password: do not add it to source control, screenshots, o
 
 ## Configure a Kubernetes agent
 
-The controller and agent template are not fully connected automatically. Complete the Jenkins setup, install and configure the Kubernetes plugin, and configure its cloud to use this cluster before creating a job that requests an agent. Use `jenkins-agent.yaml` as the pod template YAML.
+Install the **Kubernetes** plugin from **Manage Jenkins > Plugins**. Then go to **Manage Jenkins > Nodes and Clouds > Configure Clouds > Add a new cloud > Kubernetes**.
 
-The template's command expects the Jenkins URL, agent name, agent secret, and work directory to be supplied at runtime through `JENKINS_URL`, `JENKINS_AGENT_NAME`, `JENKINS_SECRET`, and `JENKINS_AGENT_WORKDIR`; `REMOTING_OPTS` is optional. Supply the actual agent secret through Jenkins/plugin-managed configuration—never commit it in a manifest or job definition.
+Use these minimum cloud settings for this repository:
 
-The current template runs as root to install Python with `apt-get` whenever an agent starts. This is slow and grants more privilege than a portfolio-ready setup should need. A follow-up should build and pin a dedicated agent image with Python preinstalled, then run it as a non-root user.
+| Cloud setting | Value |
+| --- | --- |
+| Name | `kind-jenkins` (any unique name is fine) |
+| Kubernetes URL | Leave blank to use in-cluster configuration. If needed, use `https://kubernetes.default.svc.cluster.local`. |
+| Kubernetes server certificate key | Leave blank; in-cluster configuration provides the cluster CA. |
+| Credentials | Leave blank; Jenkins uses the controller pod's service account. |
+| Namespace | `jenkins` |
+| Jenkins URL | `http://jenkins-service.jenkins.svc.cluster.local:8080` |
+| Jenkins tunnel | `jenkins-service.jenkins.svc.cluster.local:50000` |
+| WebSocket | Leave unchecked; this setup uses the inbound-agent service port. |
+
+Use **Test Connection** to check Jenkins can reach the Kubernetes API. The controller deployment must use the `jenkins-controller` service account from `service-account.yaml`; its Role grants pod-management permissions only in the `jenkins` namespace.
+
+Under **Kubernetes Pod Templates**, add a template with:
+
+- **Name:** `python-agent`
+- **Namespace:** `jenkins`
+- **Labels:** `python-agent`
+- **YAML:** paste the contents of `jenkins-agent.yaml`
+
+The manifest includes `apiVersion` and `kind`, so it can be used as a Pod definition in the plugin's YAML field. The plugin supplies `JENKINS_URL`, `JENKINS_SECRET`, and `JENKINS_AGENT_NAME` to the inbound-agent container. The work directory is set explicitly in the manifest. Do not put an actual agent secret in the repository.
+
+To confirm on-demand provisioning, run a pipeline that requests the template's label:
+
+```groovy
+pipeline {
+    agent { label 'python-agent' }
+    stages {
+        stage('Verify agent') {
+            steps {
+                sh 'python3 --version'
+            }
+        }
+    }
+}
+```
+
+Watch `kubectl get pods -n jenkins -w` during the build; the plugin should create an agent pod for the job and remove it when finished.
+
+The current template runs as root to install Python with `apt-get` whenever an agent starts. This is slow and grants more privilege than a portfolio-ready setup should need. A follow-up should build and pin a dedicated agent image with Python preinstalled, then run it as a non-root user. Leave the pod template's service account at its default unless the build itself needs Kubernetes API access; do not give build agents the controller's service account.
 
 ## Validate and inspect
 
@@ -84,5 +123,6 @@ kind delete cluster --name jenkins-cluster
 - The Kubernetes service account is limited to agent-pod operations in the `jenkins` namespace; do not broaden it without a demonstrated requirement.
 - The Jenkins service is reachable on the local host at port `8080`; this configuration is not intended for public or production exposure.
 - Image tags are currently floating (`lts` and `latest`), so rebuilds may change over time. Pin and test exact image versions before presenting repeatability claims.
-- There is no automated Jenkins configuration, sample QA pipeline, or end-to-end test yet. A strong next portfolio step is a small pipeline that runs a test, publishes its results, and demonstrates a failing case as well as a passing one.
+- The pipeline above is a manual smoke-test example, not a checked-in `Jenkinsfile`; Jenkins configuration and agent provisioning are not automated, and there is no end-to-end test yet.
+- Suggested next steps: commit a QA `Jenkinsfile` that runs tests and publishes JUnit results (including a demonstrable failure case); build a pinned, non-root Python agent image and pin the controller image; add Kubernetes manifest linting and an agent lifecycle test; then add an architecture diagram and redacted run evidence.
 - Before publishing, scan the complete Git history for secrets. A clean working-tree scan does not prove that old commits contain no credentials; rotate any credential that was ever committed.
